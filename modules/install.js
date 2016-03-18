@@ -1,30 +1,7 @@
 import { throwInvariant } from './utils';
 import { loopPromiseCaughtError } from './errors';
-
-import {
-  loop,
-  getEffect,
-  getModel,
-  isLoop,
-  liftState,
-} from './loop';
-
-import {
-  batch,
-  none,
-  isEffect,
-  effectToPromise,
-} from './effects';
-
-/**
- * Lifts a reducer to always return a looped state.
- */
-function liftReducer(reducer) {
-  return (state, action) => {
-    const result = reducer(getModel(state), action);
-    return liftState(result);
-  };
-}
+import { catchEffects } from './collection';
+import { effectToPromise } from './effects';
 
 /**
  * Installs a new dispatch function which will attempt to execute any effects
@@ -32,40 +9,43 @@ function liftReducer(reducer) {
  */
 export function install() {
   return (next) => (reducer, initialState) => {
-    const liftedInitialState = liftState(initialState);
-    const store = next(liftReducer(reducer), liftedInitialState);
+    let effects = [];
 
-    function dispatch(action) {
-      const dispatchedAction = store.dispatch(action);
-      const effect = getEffect(store.getState());
-      return runEffect(action, effect).then(() => {});
-    }
+    const liftReducer = (r) => (state, action) => {
+      return catchEffects(
+        () => r(state, action),
+        (effect) => effects.push(effect)
+      );
+    };
 
-    function runEffect(originalAction, effect) {
-      return effectToPromise(effect)
-        .then((actions) => {
-          const materializedActions = actions;
-          return Promise.all(materializedActions.map(dispatch));
-        })
-        .catch((error) => {
-          console.error(loopPromiseCaughtError(originalAction.type));
-          throw error;
-        });
-    }
+    const store = next(liftReducer(reducer), initialState);
 
-    function getState() {
-      return getModel(store.getState());
-    }
-
-    function replaceReducer(r) {
+    const replaceReducer = (r) => {
       return store.replaceReducer(liftReducer(r));
-    }
+    };
 
-    runEffect({ type: "@@ReduxLoop/INIT" }, getEffect(liftedInitialState));
+    const dispatch = (action) => {
+      store.dispatch(action);
+      return execute(action).then(() => {});
+    };
+
+    const execute = (originalAction) => {
+      const currentEffects = effects;
+      effects = [];
+      return Promise.all(
+        currentEffects.map((effect) => {
+          return effectToPromise(effect)
+            .then((actions) => Promise.all(actions.map(dispatch)))
+            .catch((error) => {
+              console.error(loopPromiseCaughtError(originalAction.type));
+              throw error;
+            });
+        })
+      );
+    };
 
     return {
       ...store,
-      getState,
       dispatch,
       replaceReducer,
     };

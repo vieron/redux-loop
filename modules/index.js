@@ -1,9 +1,7 @@
 import {
-  loop,
-  liftState,
-  getModel,
-  getEffect,
-} from './loop';
+  runEffect,
+  catchEffects,
+} from './collection';
 
 import {
   batch,
@@ -17,10 +15,6 @@ import {
   install,
 } from './install';
 
-import {
-  combineReducers,
-} from './combineReducers';
-
 
 const Effects = {
   constant,
@@ -31,11 +25,8 @@ const Effects = {
 };
 
 export {
-  combineReducers,
   Effects,
   install,
-  loop,
-  liftState,
-  getModel,
-  getEffect,
+  runEffect,
+  catchEffects,
 };

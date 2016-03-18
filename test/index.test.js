@@ -1,7 +1,7 @@
 import test from 'tape';
-import { install, loop, Effects, combineReducers } from '../modules';
+import { install, runEffect, catchEffects, Effects } from '../modules';
 import { effectToPromise } from '../modules/effects';
-import { createStore, applyMiddleware, compose } from 'redux';
+import { createStore, applyMiddleware, compose, combineReducers } from 'redux';
 
 const finalCreateStore = install()(createStore);
 
@@ -21,7 +21,7 @@ test('a looped action gets dispatched after the action that initiated it is redu
     prop2: true,
   };
 
-  function doThirdLater(value) {
+  const doThirdLater = (value) => {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         resolve(thirdAction(value));
@@ -29,12 +29,11 @@ test('a looped action gets dispatched after the action that initiated it is redu
     });
   }
 
-  function prop1Reducer(state = initialState.prop1, action) {
+  const prop1Reducer = (state = initialState.prop1, action) => {
     switch(action.type) {
 
     case 'FIRST_ACTION':
-      return loop(
-        { ...state, firstRun: true },
+      runEffect(
         Effects.batch([
           Effects.batch([
             Effects.constant(secondAction),
@@ -43,6 +42,8 @@ test('a looped action gets dispatched after the action that initiated it is redu
           Effects.promise(doThirdLater, 'hello'),
         ])
       );
+
+      return { ...state, firstRun: true };
 
     case 'SECOND_ACTION':
       return { ...state, secondRun: true };
@@ -55,9 +56,7 @@ test('a looped action gets dispatched after the action that initiated it is redu
     }
   }
 
-  function prop2Reducer(state = initialState.prop2, action) {
-    return state;
-  }
+  const prop2Reducer = (state = initialState.prop2, action) => state;
 
   const finalReducer = combineReducers({
     prop1: prop1Reducer,
