@@ -28,7 +28,11 @@ export function install() {
     const liftReducer = (reducer) => (state, action) => {
       const result = reducer(state, action);
       const [model, effect] = liftState(result);
-      currentEffect = effect;
+      if (currentEffect.type === none().type) {
+        currentEffect = effect
+      } else {
+        currentEffect = batch([currentEffect, effect]);
+      }
       return model;
     };
 
